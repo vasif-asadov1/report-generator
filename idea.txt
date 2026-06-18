@@ -1,0 +1,220 @@
+Report Generator Pro Desktop App with PySide6
+
+I am taking lots of notes. I am Data Analyst | Data Scientist. In EDA processes, feature engineering processes, I need to create visually appealing notes with titles, bullet points, different programming language code blocks, math codes and so on. Therefore, I decided to create beautiful and blazingly fast desktop app that will allow us preview in the app. This app must have the following functionalities:
+
+
+1. We should build it with PySide6 (or PyQt6 which one is better in styling and handling lots of functions and can run processes at the background without crashing and freezing). Or, if there are any much better and professional library than these we can use it.
+
+2.There will be top bar in which we will have the buttons on it. The buttons must be these in sequence:
+    1. Open button: Clicking to this button will ask us to choose directory to our project. All exported pdfs, session database will be stored in that directory. If it is not clicked; then when the user click to Shift+Enter to take note, it must opened automatically and ask us to choose the directory.
+    2. Fonts drop down: This will adjust the font size in the app gui. It will go from 10pt up to 36pt. Font size selection will not affect the generated pdf at the end.
+    3. Erase button: When it is pressed, the last entry is deleted from the display and pdf.
+    4. Purge button: when it is pressed all history is deleted.
+    5. Clean: when it is pressed the display area is cleared. the display area become empty, but it does not affect the history.
+    6. Export button (Ctrl+Shift+E shortcut): when it is pressed, all history must be converted to pdf or pptx slides.
+    9. ☀️ Light / 🌙 Dark toggle switcher: this adjusts the theme in GUI. currently, light theme must be solarized light, dark theme bust be solarized dark theme. This does not affect the generated pdf theme.
+    10. A button with question / help icon: It will open pop up window showing the full user guidance. There must be button in that button: Close, Save. When close is clicked, pop up will closed. When Save is clicked, the instructions will be saved to the directory chosen from Path button.
+    11. Github.svg icon. When pressed it will navigate to the Github repo.
+
+Each button must have tooltip according to the selected theme.
+
+3. The main area - center is consist of two parts: Left Part: Wide area. We will write our texts here. The right part: When we write something in the left part, and press "Shift+Enter", the text must be rendered and displayed in the right part. This is our preview window. Both text area and display area must be at the same size, and wide. beautifully encircled by transparent glassy borders.
+
+
+4. The program must store everything written in the display area. SQLite maybe good choice to remember all written texts since it has beautiful compression. It will be available for writing 10 thousands of lines without lagging (for most extremal cases). The created SQLite database will be saved in the .session hidden folder. If the user have written notes and closed the window, the database must sit there. In the next days, whenever the user opens the window, and choose the directory folder of the created session, then the newly taken notes will be inserted, not overwritten. so we will not lose the previously noted data. Important rule: the directory folder should have only one database sitting inside .session/ folder. That will create clean notes eliminating spaghettiness.
+
+5. The notes must be taken in all latin alphabetic languages. Russian, arabic, persian, japanese and others are not supported in this version.
+
+PDF generation structure:
+
+
+At the beginning of each session (when the user opens a new directory and start to take notes) it should have frontmatter. that frontmatter will be inside "---" these. That frontmatter will be taken from there, and will not be displayed. After defining the frontmatter, the content inside that frontmatter will be saved inside a config file to remember the choice of users. this is important. if the user mistakenly wrote wrong frontmatter and hit shift+enter, in that case, he/she should open the created config file manually, and make changes there. not in window anymore.
+
+
+Frontmatter includes:
+
+---
+editor: markdown or mdx# in the future releases, typst, latex codes will be provided
+title: Title of the pdf # This will be the title of the generated pdf. it will also written inside the beginning of the pdf, in the first page.
+author: Name of the note taker # this is optional
+code-theme: Dracula # there will be embedded code blocks inside the pdf. Its theme will be adjusted from here.
+date: Date of note
+scale: A4 # other options are: A3, A5, 4:3, 16:10, 16:9, or any other custom options
+theme: Standard # this will adjust the theme of generated pdf. Currently, we will use standard theme which is white background, black text. Later on, we will add new available themes.
+font-size: 16px # this font size can be overwritten for some texts by putting inside  <font size = 10px> </font. But this defines the general font size of the ordinary text (not titles)
+h1-size: 24px # size of Heading 1 . can not overwritten
+h2-size: 20px
+h3-size: 18px
+h4-size: 16px
+h1-color: pink
+h2-color: #FF4324
+h3-color: cyan
+h4-color: black
+---
+
+
+These are currently available frontmatter. If the user forgets to write it, then the frontmatter config will be created automatically with default values. The user can open that config and change it later.
+
+
+Special signs:
+
+
+- if you want to draw line and separate sections, in the text area write: line{---}
+
+- headings will be: #, ##, ###, ####
+
+- code blocks will be written standard markdown:
+
+```python
+import os
+```
+
+- tables will be written in the following format:
+
+table{
+    headings: [CustomerID, Name, Surname],
+    row1: [1, "Vasif", "Asadov"],,
+    row2: [2, "Elnur", "Asadov"].....
+}
+
+this will create beautiful table and display it in the display area. It should successfully write into the pdf.
+
+
+- math codes will be written inside $..$ (inline code) and $$..$$ separate blocks. math codes will be written beautifully. this is most important part. the user should not download any package manually to get full math codes. necessary packages must be downloaded embedded into the program.
+
+
+- if we want to use $ sign without wanting it to be rendered as block, we should write it as \$. Special characters can be escaped by puttint \ before it.
+
+
+- you can add any functionalities yourself.
+
+- in order to embed images: image{image_path}
+
+
+
+These are my current design ideas. feel free to give the best, better and life saver ideas and solutions for these ideas. we should build it successfully , becaause I tired of note taker apps. I will add different styling things later. For example, styled comparison box with comp_box{}, beautiful reference list as ref_list{} and so on. So, consider these, too. this will be my big project and will be used by thousands of people. help me to keep it in the beautiful code sturcture which will not consume your tokens too much.
+
+I created /home/vasif/Development/ReportGenerator/ folder.
+I created repo: https://github.com/vasif-asadov1/report-generator
+
+help me to connect these with ssh key connection (I already set the ssh key configuration)
+
+guide me step by step. dont be fast and dont consume too much tokens. if you remember the long code yourself, and we need to add new blocks there or make some changes, just tell me the exact location of it. I dont want to consume your tokens early before completing the project.
+
+
+we should create .venv in the folder using python 3.11
+then we should install all necessary packages. this project must cost 0. completely free.
+then inside the project we can create folders.
+
+I think the below folder structure:
+
+/home/vasif/Development/ReportGenerator/:
+
+> src:
+    - main.py (the GUI part and functions. we will build it step by step without consuming too much tokens)
+    - markdown_pdf.py (if the editor is chosen as markdown, then our pdf conversion functions will be inside of this. we should focus on this now)
+    - typst_pdf.py (this will be in the future)
+    - latex_pdf.py (this will be in the future)
+    - pydict_pdf.py (this will be in the future. here python dictionaries will be used to create titles, blocks, paragraphs and so on. very advanced elegant architecture)
+
+> assets:
+    - created .db file maybe
+    - fonts
+    - images
+
+> requirements.txt
+> README.md
+> .gitignore (.venv, and all unnnecesaary files)
+
+
+Bro, if you understand this project, tell me honestly. is it easy to do? creating gui is easy. but will we be able to achieve that pdf conversion and preview display configurations? I dont want to use another note taker apps. I want to use my own one.
+
+Fully understand the project and answer these questions:
+
+1. Which tool should we use to design this app with zero latency fully offline and responsive , beautiful stlying and infinity customization.
+
+2. Is it realistic project? How much time we should spend to complete this project?
+
+3. will it affect affect my data Analyst career. because I want this app to create beautiful analyst reports. and daily notes. too
+
+
+4. Completely explain what should we do without starting the code immediately.
+
+5. can you fully guide me through the whole project without token problems?
+
+6. you are free to recommend me solutions to these design. best solutions that wil make our work easy but powerful/
+
+7. is it easy to render the ![]() this type of markdown signs , or image{image_path}. for example, will it be easy to use "```sql" this or
+
+code_block{source : sql , code : select * from customers},
+
+or, $$..$$  vs math_block{frac{x}{y} = \lim{x}{y+z}}
+
+which option is easier, then we will focus on that way.
+
+
+anwser these questions fully please. and be honest sincere. tell me all problems, difficulties and how can we solve them effectively?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
