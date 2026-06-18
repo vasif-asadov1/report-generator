@@ -1,11 +1,12 @@
 import sys
 import os
 import sqlite3
+import json
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QPlainTextEdit, QSplitter, QListWidget, QComboBox,
     QDialog, QMessageBox, QFileDialog, QFormLayout, QLineEdit, QDialogButtonBox,
-    QFrame, QLabel, QSizePolicy
+    QFrame, QLabel, QSizePolicy, QStyledItemDelegate
 )
 from PySide6.QtCore import Qt, QUrl, QRegularExpression, QMarginsF, QSizeF
 from PySide6.QtGui import (
@@ -17,6 +18,15 @@ from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
 
 # Import our new Markdown Engine
 from markdown_pdf import MarkdownEngine 
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller onefile """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class ZoomablePlainTextEdit(QPlainTextEdit):
     """Custom PlainTextEdit that natively supports zooming via mouse wheel and shortcuts."""
@@ -39,8 +49,6 @@ class ZoomablePlainTextEdit(QPlainTextEdit):
         self.shortcut_zoom_out.activated.connect(self.zoom_out)
 
     def update_font(self):
-        font = QFont("Cascadia Code", self.current_font_size)
-        self.setFont(font)
         # Force the font size dynamically so it bypasses global QSS overriding
         self.setStyleSheet(f"font-size: {self.current_font_size}pt; font-family: 'Cascadia Code';")
 
@@ -161,7 +169,7 @@ class HelpGuideDialog(QDialog):
                 <h3>Keyboard Shortcuts</h3>
                 <ul>
                     <li><span class="shortcut">Ctrl+S</span> <strong>(Live Draft):</strong> Instantly renders your current editor text into the preview window alongside your saved logs. <em>It does not save to the database.</em> Use this to test your math syntax or code formatting.</li>
-                    <li><span class="shortcut">Ctrl+Shift+S</span> <strong>(Commit Log):</strong> Saves your current text into the database as a new discrete log, adding it to the history sidebar. Your text remains in the editor so you can continue writing seamlessly.</li>
+                    <li><span class="shortcut">Ctrl+Shift+S</span> <strong>(Commit Log):</strong> Saves your current text into the database as a new discrete log, adding it to the history sidebar.</li>
                     <li><span class="shortcut">Ctrl+Shift+E</span> <strong>(Export):</strong> Generates the final PDF.</li>
                     <li><span class="shortcut">Ctrl</span> + <strong>Mouse Wheel Up/Down:</strong> Zoom in and out of the editor text dynamically. <span class="shortcut">Ctrl++</span> and <span class="shortcut">Ctrl+-</span> also work.</li>
                 </ul>
@@ -175,6 +183,7 @@ class HelpGuideDialog(QDialog):
                 <li><strong>Inline Math:</strong> Wrap your LaTeX in single dollar signs: <code>$E = mc^2$</code>.</li>
                 <li><strong>Block Math:</strong> Wrap your LaTeX in double dollar signs: <code>$$\lim_{x \to \infty} f(x)$$</code>.</li>
                 <li><strong>Dividers:</strong> Use <code>line{---}</code> to render a visual separation line.</li>
+                <li><strong>Images:</strong> Standard markdown <code>![Alt](/path/to/img.png)</code> or raw HTML <code>&lt;img src="/path/img.png" width="400"&gt;</code></li>
             </ul>
 
             <h2>4. Managing Logs (The Sidebar)</h2>
@@ -191,12 +200,12 @@ class HelpGuideDialog(QDialog):
                 <li><strong>Title, Author & Date:</strong> Automatically generates a beautiful, standardized cover block at the very top of your PDF.</li>
                 <li><strong>Scale (Dimensions):</strong> Choose standard paper formats (A4, A3, A5, Letter).</li>
                 <li><strong>LinkedIn Carousel Formats:</strong> Select <strong>LinkedIn Square (1:1)</strong> or <strong>LinkedIn Portrait (4:5)</strong> to easily export beautifully proportioned slides for social media.</li>
-                <li><strong>Custom Dimensions:</strong> Select "Custom" scale and define exact Width and Height dimensions in Points at the bottom of the form (1 pt = 1 pixel).</li>
-                <li><strong>Theme Overrides:</strong> Configure Header font sizes (e.g., 24px) and hex colors precisely to match your brand or presentation style.</li>
+                <li><strong>Custom Dimensions:</strong> Select "Custom" scale and define exact Width and Height dimensions in Pixels at the bottom of the form.</li>
+                <li><strong>Theme Overrides:</strong> Keep headings as "theme" to inherit the accent color naturally, or override them with precise hex colors precisely to match your brand.</li>
             </ul>
 
             <h2>6. PDF Export Engine</h2>
-            <p>Once your document looks perfect in the preview, press <span class="shortcut">Ctrl+Shift+E</span> or click <strong>📄 Export</strong>. The app silently compiles your layout settings and your entire log history, generating a flawless PDF directly next to your <code>.session</code> folder. If you edit your notes and export again, it cleanly overwrites the exact same file to prevent duplicates.</p>
+            <p>Once your document looks perfect in the preview, press <span class="shortcut">Ctrl+Shift+E</span> or click <strong>📄 Export</strong>. The app silently compiles your layout settings and your entire log history, generating a flawless PDF directly in your project root directory. If you edit your notes and export again, it cleanly overwrites the exact same file to prevent duplicates.</p>
         </body>
         </html>
         """
@@ -235,6 +244,7 @@ class LayoutSettingsDialog(QDialog):
         self.setWindowTitle("PDF Layout Settings")
         self.resize(400, 500)
         self.settings = current_settings.copy()
+        self.parent_app = parent
         
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
@@ -244,8 +254,17 @@ class LayoutSettingsDialog(QDialog):
             if key in ["scale", "theme", "code_theme"]:
                 combo = QComboBox()
                 if key == "scale": combo.addItems(["A4", "A3", "A5", "Letter", "LinkedIn Square (1:1)", "LinkedIn Portrait (4:5)", "Custom"])
-                elif key == "theme": combo.addItems(["Standard", "Soft Paper", "Dracula"])
-                elif key == "code_theme": combo.addItems(["Monokai", "Dracula", "GitHub"])
+                elif key == "theme":
+                    if self.parent_app:
+                        combo.addItems(list(self.parent_app.themes.keys()))
+                    else:
+                        combo.addItems(["Standard", "Soft Paper", "Dracula"])
+                elif key == "code_theme": 
+                    combo.addItems([
+                        "Atom One Dark", "Catppuccin Macchiato", "Catppuccin Frappe (Light)", 
+                        "Dracula", "GitHub Dark", "GitHub Light", 
+                        "Monokai", "Solarized Dark", "Solarized Light"
+                    ])
                 combo.setCurrentText(value)
                 self.inputs[key] = combo
             else:
@@ -275,7 +294,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         super().__init__(document)
         self.rules = []
 
-        c_heading = QColor("#bd93f9") if is_dark else QColor("#268bd2")
+        c_heading = QColor(theme_colors["accent"]) 
         c_list = QColor("#50fa7b") if is_dark else QColor("#859900")
         c_math = QColor("#ff79c6") if is_dark else QColor("#d33682")
         c_code = QColor("#8be9fd") if is_dark else QColor("#2aa198")
@@ -340,29 +359,24 @@ class ReportGeneratorApp(QMainWindow):
         super().__init__()
         self.setWindowTitle("Report Generator Pro - Unsaved Session")
         self.resize(1400, 800)
-        self.is_dark_theme = True
 
         self.conn = None
         self.cursor = None
         self.current_session_dir = None
         self.current_session_name = None
+        self.is_preview_loaded = False 
 
+        # --- UNIFIED PROFESSIONAL THEME PALETTES ---
         self.themes = {
-            "light": {
-                "bg": "#F4F3EE", "text": "#3E3C38", "border": "#E0DCD3",
-                "button_bg": "#EAE7E0", "button_hover": "#DCD8D0", "accent": "#4A90E2"
-            },
-            "dark": {
-                "bg": "#282a36", "text": "#f8f8f2", "border": "#44475a",
-                "button_bg": "#44475a", "button_hover": "#6272a4", "accent": "#bd93f9"
-            }
-        }
-        
-        self.preview_themes = {
-            "Standard": {"bg": "#ffffff", "text": "#000000"},
-            "Soft Paper": {"bg": "#F4F3EE", "text": "#3E3C38"},
-            "Dracula Soft": {"bg": "#282a36", "text": "#f8f8f2"},
-            "Atom One Dark": {"bg": "#282c34", "text": "#abb2bf"}
+            "Solarized Light": {"bg": "#fdf6e3", "text": "#586e75", "border": "#eee8d5", "button_bg": "#eee8d5", "button_hover": "#e8dfd6", "accent": "#268bd2", "is_dark": False},
+            "Solarized Dark": {"bg": "#002b36", "text": "#839496", "border": "#073642", "button_bg": "#073642", "button_hover": "#586e75", "accent": "#268bd2", "is_dark": True},
+            "GitHub Light": {"bg": "#ffffff", "text": "#24292e", "border": "#e1e4e8", "button_bg": "#f6f8fa", "button_hover": "#e1e4e8", "accent": "#0366d6", "is_dark": False},
+            "GitHub Dark": {"bg": "#0d1117", "text": "#c9d1d9", "border": "#30363d", "button_bg": "#161b22", "button_hover": "#21262d", "accent": "#58a6ff", "is_dark": True},
+            "Soft Paper": {"bg": "#F4F3EE", "text": "#3E3C38", "border": "#DCD8D0", "button_bg": "#EAE7E0", "button_hover": "#DCD8D0", "accent": "#4A90E2", "is_dark": False},
+            "Monokai": {"bg": "#272822", "text": "#f8f8f2", "border": "#3e3d32", "button_bg": "#3e3d32", "button_hover": "#49483e", "accent": "#f92672", "is_dark": True},
+            "Catppuccin Macchiato": {"bg": "#24273a", "text": "#cad3f4", "border": "#363a4f", "button_bg": "#1e2030", "button_hover": "#363a4f", "accent": "#8aadf4", "is_dark": True},
+            "Catppuccin Frappe (Light)": {"bg": "#eff1f5", "text": "#4c4f69", "border": "#ccd0da", "button_bg": "#e6e9ef", "button_hover": "#dce0e8", "accent": "#1e66f5", "is_dark": False},
+            "Atom One Dark": {"bg": "#282c34", "text": "#abb2bf", "border": "#3e4451", "button_bg": "#21252b", "button_hover": "#3e4451", "accent": "#61afef", "is_dark": True}
         }
 
         self.md_engine = MarkdownEngine()
@@ -370,7 +384,7 @@ class ReportGeneratorApp(QMainWindow):
         self.setup_ui()
         self.apply_theme()
         self.setup_shortcuts()
-        self.render_document()
+        self.render_document(preserve_scroll=False)
 
     def setup_shortcuts(self):
         shortcut_save = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
@@ -392,8 +406,6 @@ class ReportGeneratorApp(QMainWindow):
         # --- THE POLISHED TOOLBAR ---
         self.toolbar_frame = QFrame()
         self.toolbar_frame.setObjectName("toolbar")
-        
-        # FIX: Force the toolbar to stay compact and not expand vertically!
         self.toolbar_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         
         self.top_bar = QHBoxLayout(self.toolbar_frame)
@@ -422,19 +434,21 @@ class ReportGeneratorApp(QMainWindow):
         self.btn_clear_all.clicked.connect(self.clear_all_logs)
 
         # 2. Middle Group: Theming & Settings
-        self.btn_theme = QPushButton("☀️ Editor Theme")
-        self.btn_theme.setCursor(Qt.PointingHandCursor)
-        self.btn_theme.setToolTip("Toggle UI between Light and Dark mode")
-        self.btn_theme.clicked.connect(self.toggle_theme)
+        self.combo_ui_theme = QComboBox()
+        self.combo_ui_theme.setItemDelegate(QStyledItemDelegate()) # Force custom CSS on items
+        self.combo_ui_theme.setCursor(Qt.PointingHandCursor)
+        self.combo_ui_theme.setToolTip("Change the color theme of the entire editor UI")
+        self.combo_ui_theme.addItems(list(self.themes.keys()))
+        self.combo_ui_theme.setCurrentText("Atom One Dark")
+        self.combo_ui_theme.currentTextChanged.connect(self.apply_theme) 
 
-        self.lbl_preview = QLabel("👁️ Preview:")
-        self.lbl_preview.setObjectName("preview_label")
-        
         self.combo_preview_theme = QComboBox()
+        self.combo_preview_theme.setItemDelegate(QStyledItemDelegate()) # Force custom CSS on items
         self.combo_preview_theme.setCursor(Qt.PointingHandCursor)
-        self.combo_preview_theme.setToolTip("Change the color theme of the right preview pane")
-        self.combo_preview_theme.addItems(["Standard", "Soft Paper", "Dracula Soft", "Atom One Dark"])
-        self.combo_preview_theme.currentTextChanged.connect(self.render_document) 
+        self.combo_preview_theme.setToolTip("Change the color theme of the generated document")
+        self.combo_preview_theme.addItems(list(self.themes.keys()))
+        self.combo_preview_theme.setCurrentText("Soft Paper")
+        self.combo_preview_theme.currentTextChanged.connect(self.on_preview_theme_changed) 
 
         self.btn_layout = QPushButton("⚙️ Layout")
         self.btn_layout.setCursor(Qt.PointingHandCursor)
@@ -450,8 +464,10 @@ class ReportGeneratorApp(QMainWindow):
         self.btn_github = QPushButton(" GitHub")
         self.btn_github.setCursor(Qt.PointingHandCursor)
         self.btn_github.setToolTip("Visit the open-source repository")
-        self.btn_github.setIcon(QIcon("assets/github.svg"))
-        # FIX: Actually link the GitHub button without markdown brackets
+        
+        # Use resource_path for the icon so it survives PyInstaller bundling
+        self.btn_github.setIcon(QIcon(resource_path("assets/github.svg")))
+        
         self.btn_github.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/vasif-asadov1/report-generator")))
         
         self.btn_help = QPushButton("❓ Help")
@@ -465,20 +481,18 @@ class ReportGeneratorApp(QMainWindow):
         self.top_bar.addWidget(self.btn_open)
         self.top_bar.addWidget(self.btn_clear_all)
         
-        self.top_bar.addSpacing(20) # Add a clean gap before the middle tools
+        self.top_bar.addSpacing(20) 
         
-        self.top_bar.addWidget(self.btn_theme)
-        self.top_bar.addWidget(self.lbl_preview)
+        self.top_bar.addWidget(self.combo_ui_theme)
         self.top_bar.addWidget(self.combo_preview_theme)
         self.top_bar.addWidget(self.btn_layout)
         self.top_bar.addWidget(self.btn_export)
         
-        self.top_bar.addStretch() # Pushes GitHub and Help cleanly to the far right edge
+        self.top_bar.addStretch() 
         
         self.top_bar.addWidget(self.btn_github)
         self.top_bar.addWidget(self.btn_help)
 
-        # Add Toolbar to main layout
         self.main_layout.addWidget(self.toolbar_frame)
 
         # --- MAIN CONTENT AREA ---
@@ -497,16 +511,12 @@ class ReportGeneratorApp(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setHandleWidth(8)
         
-        # Use our new Zoomable editor
         self.editor = ZoomablePlainTextEdit()
         self.editor.setPlaceholderText("Write your markdown here...\nPress Ctrl+S to preview.\nPress Ctrl+Shift+S to save log.")
 
-        colors = self.themes["light"] if not self.is_dark_theme else self.themes["dark"]
-        self.highlighter = MarkdownHighlighter(self.editor.document(), colors, self.is_dark_theme)
-        
         self.preview = QWebEngineView()
         self.preview.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-        self.preview.loadFinished.connect(self.scroll_to_bottom)
+        self.preview.loadFinished.connect(self.on_preview_loaded)
         
         self.splitter.addWidget(self.editor)
         self.splitter.addWidget(self.preview)
@@ -514,10 +524,13 @@ class ReportGeneratorApp(QMainWindow):
         self.content_layout.addWidget(self.splitter)
 
     # --- CORE WORKFLOW METHODS ---
+    def on_preview_loaded(self, ok):
+        if ok:
+            self.is_preview_loaded = True
 
     def preview_only(self):
         current_text = self.editor.toPlainText().strip()
-        self.render_document(additional_text=current_text)
+        self.render_document(additional_text=current_text, preserve_scroll=True)
 
     def open_help_guide(self):
         dialog = HelpGuideDialog(self)
@@ -531,6 +544,10 @@ class ReportGeneratorApp(QMainWindow):
         dir_path = os.path.dirname(file_path)
         base_name = os.path.basename(file_path)
         if base_name.endswith('.db'): base_name = base_name[:-3]
+        
+        # Safeguard: Ensure we find the project root if user selects path directly inside .session
+        if os.path.basename(dir_path) == '.session':
+            dir_path = os.path.dirname(dir_path)
             
         self.current_session_dir = dir_path
         self.current_session_name = base_name
@@ -557,13 +574,27 @@ class ReportGeneratorApp(QMainWindow):
             for k, v in dialog.settings.items():
                 self.cursor.execute("UPDATE settings SET value = ? WHERE key = ?", (v, k))
             self.conn.commit()
+            
+            # Sync the combo box to reflect Layout Settings changes
+            self.combo_preview_theme.blockSignals(True)
+            self.combo_preview_theme.setCurrentText(dialog.settings.get('theme', 'Soft Paper'))
+            self.combo_preview_theme.blockSignals(False)
+            
+            # Rebuild full CSS blocks and layout rules natively
+            self.render_document(preserve_scroll=False)
 
     def open_session(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open Existing Session", "", "Database Files (*.db)")
         if not file_path: return
         
         session_folder = os.path.dirname(file_path)
-        self.current_session_dir = os.path.dirname(session_folder) 
+        
+        # Safeguard: Find the actual project root folder (parent of .session)
+        if os.path.basename(session_folder) == '.session':
+            self.current_session_dir = os.path.dirname(session_folder) 
+        else:
+            self.current_session_dir = session_folder
+
         base_name = os.path.basename(file_path)
         if base_name.endswith('.db'): base_name = base_name[:-3]
             
@@ -579,11 +610,11 @@ class ReportGeneratorApp(QMainWindow):
         self.cursor.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
 
         default_settings = {
-            "title": name, "author": "", "date": "", "code_theme": "Monokai",
+            "title": name, "author": "", "date": "", "code_theme": "Atom One Dark",
             "scale": "A4", "custom_width": "1080", "custom_height": "1080",
-            "theme": "Standard", "font_size": "16px",
+            "theme": "Soft Paper", "font_size": "16px",
             "h1_size": "24px", "h2_size": "20px", "h3_size": "18px", "h4_size": "16px",
-            "h1_color": "pink", "h2_color": "#FF4324", "h3_color": "cyan", "h4_color": "black"
+            "h1_color": "theme", "h2_color": "theme", "h3_color": "theme", "h4_color": "theme"
         }
         
         for k, v in default_settings.items():
@@ -591,9 +622,17 @@ class ReportGeneratorApp(QMainWindow):
             
         self.conn.commit()
         
+        # Sync the combo box with the saved database theme
+        self.cursor.execute("SELECT value FROM settings WHERE key='theme'")
+        row = self.cursor.fetchone()
+        if row:
+            self.combo_preview_theme.blockSignals(True)
+            self.combo_preview_theme.setCurrentText(row[0])
+            self.combo_preview_theme.blockSignals(False)
+            
         self.setWindowTitle(f"Report Generator Pro - {name}")
         self.refresh_sidebar()
-        self.render_document()
+        self.render_document(preserve_scroll=False)
 
     def open_edit_dialog(self, item):
         log_id_str = item.text().split(":")[0] 
@@ -617,7 +656,7 @@ class ReportGeneratorApp(QMainWindow):
                 
             self.conn.commit()
             self.refresh_sidebar()
-            self.render_document()
+            self.render_document(preserve_scroll=True)
 
     def save_log(self):
         text = self.editor.toPlainText().strip()
@@ -630,14 +669,16 @@ class ReportGeneratorApp(QMainWindow):
         self.cursor.execute("INSERT INTO logs (content) VALUES (?)", (text,))
         self.conn.commit()
         
+        # We do NOT clear the editor so the user can continue logging manually.
         self.refresh_sidebar()
-        self.render_document()
+        self.render_document(preserve_scroll=True)
     
     def scroll_to_log(self, item):
         try:
             log_id_str = item.text().split(":")[0] 
             log_id = int(log_id_str.replace("Log ", ""))
             
+            # Natively scrolls into the exact slice/slide since all logs are preserved structurally
             js_code = f"""
             (function() {{
                 document.querySelectorAll('.highlight-flash').forEach(el => {{
@@ -709,12 +750,76 @@ class ReportGeneratorApp(QMainWindow):
                     
             self.sidebar.addItem(f"Log {log_id}: {preview}")
 
-    def render_document(self, additional_text=""):
+    def on_preview_theme_changed(self, text):
+        if self.conn:
+            self.cursor.execute("UPDATE settings SET value = ? WHERE key = 'theme'", (text,))
+            self.conn.commit()
+        # Changed to False to force global CSS background changes visually
+        self.render_document(preserve_scroll=False)
+
+    def get_code_theme_css(self, theme_name):
+        themes = {
+            "Monokai": { "bg": "#272822", "text": "#f8f8f2", "k": "#f92672", "s": "#e6db74", "c": "#75715e", "nf": "#a6e22e", "mi": "#ae81ff" },
+            "Dracula": { "bg": "#282a36", "text": "#f8f8f2", "k": "#ff79c6", "s": "#f1fa8c", "c": "#6272a4", "nf": "#50fa7b", "mi": "#bd93f9" },
+            "GitHub Light": { "bg": "#f6f8fa", "text": "#24292e", "k": "#d73a49", "s": "#032f62", "c": "#6a737d", "nf": "#6f42c1", "mi": "#005cc5" },
+            "GitHub Dark": { "bg": "#0d1117", "text": "#c9d1d9", "k": "#ff7b72", "s": "#a5d6ff", "c": "#8b949e", "nf": "#d2a8ff", "mi": "#79c0ff" },
+            "Solarized Light": { "bg": "#fdf6e3", "text": "#657b83", "k": "#859900", "s": "#2aa198", "c": "#93a1a1", "nf": "#268bd2", "mi": "#d33682" },
+            "Solarized Dark": { "bg": "#002b36", "text": "#839496", "k": "#859900", "s": "#2aa198", "c": "#586e75", "nf": "#268bd2", "mi": "#d33682" },
+            "Catppuccin Macchiato": { "bg": "#24273a", "text": "#cad3f4", "k": "#c6a0f6", "s": "#a6da95", "c": "#5b6078", "nf": "#8aadf4", "mi": "#f5a97f" },
+            "Catppuccin Frappe (Light)": { "bg": "#eff1f5", "text": "#4c4f69", "k": "#ca9ee6", "s": "#a6d189", "c": "#9ca0b0", "nf": "#8caaee", "mi": "#ef9f76" },
+            "Atom One Dark": { "bg": "#282c34", "text": "#abb2bf", "k": "#c678dd", "s": "#98c379", "c": "#5c6370", "nf": "#61afef", "mi": "#d19a66" }
+        }
+        c = themes.get(theme_name, themes["Atom One Dark"])
+        
+        return f"""
+            pre, .codehilite {{ 
+                background-color: {c['bg']} !important; 
+                color: {c['text']} !important; 
+                padding: 15px; 
+                border-radius: 8px; 
+                overflow-x: auto; 
+                font-family: 'Cascadia Code', monospace;
+                border: 1px solid rgba(128,128,128,0.2);
+            }}
+            code {{ 
+                font-family: 'Cascadia Code', monospace; 
+                background-color: rgba(128,128,128,0.15); 
+                padding: 2px 4px; 
+                border-radius: 4px; 
+            }}
+            pre code {{ 
+                background-color: transparent; 
+                padding: 0; 
+                color: inherit;
+            }}
+            .codehilite .k, .codehilite .kd, .codehilite .kn, .codehilite .kp, .codehilite .kr, .codehilite .kt {{ color: {c['k']}; font-weight: bold; }}
+            .codehilite .s, .codehilite .s1, .codehilite .s2, .codehilite .sb, .codehilite .sc, .codehilite .sd, .codehilite .si, .codehilite .se, .codehilite .sh, .codehilite .sx {{ color: {c['s']}; }}
+            .codehilite .c, .codehilite .c1, .codehilite .ch, .codehilite .cm, .codehilite .cp, .codehilite .cpf, .codehilite .cs {{ color: {c['c']}; font-style: italic; }}
+            .codehilite .nf, .codehilite .fm, .codehilite .nc, .codehilite .nd, .codehilite .ne, .codehilite .nn, .codehilite .nx {{ color: {c['nf']}; }}
+            .codehilite .m, .codehilite .mb, .codehilite .mf, .codehilite .mh, .codehilite .mi, .codehilite .il, .codehilite .mo {{ color: {c['mi']}; }}
+            .codehilite .o, .codehilite .ow, .codehilite .p, .codehilite .pi {{ color: {c['text']}; }}
+        """
+
+    def render_document(self, additional_text="", preserve_scroll=True):
         logs = []
+        
+        config = {
+            "title": self.current_session_name or "Unsaved Document", 
+            "author": "", "date": "", "scale": "A4",
+            "custom_width": "1080", "custom_height": "1080",
+            "font_size": "16px", "h1_size": "24px", "h2_size": "20px", 
+            "h3_size": "18px", "h4_size": "16px",
+            "h1_color": "theme", "h2_color": "theme", "h3_color": "theme", "h4_color": "theme"
+        }
+        
         if self.conn:
             self.cursor.execute("SELECT id, content FROM logs ORDER BY id ASC")
             for row in self.cursor.fetchall():
                 logs.append(f'<div id="log-{row[0]}"></div>\n{row[1]}')
+                
+            self.cursor.execute("SELECT key, value FROM settings")
+            for row in self.cursor.fetchall():
+                config[row[0]] = row[1]
         
         if additional_text:
             logs.append(additional_text)
@@ -724,17 +829,247 @@ class ReportGeneratorApp(QMainWindow):
             return
             
         full_markdown = "\n\n".join(logs)
-        theme_name = self.combo_preview_theme.currentText()
-        colors = self.preview_themes.get(theme_name, self.preview_themes["Standard"])
+        theme_name = config.get("theme", self.combo_preview_theme.currentText())
+        colors = self.themes.get(theme_name, self.themes["Soft Paper"])
         
-        html = self.md_engine.convert_to_html(full_markdown, colors)
-        self.preview.setHtml(html, QUrl("file:///"))
+        raw_html = self.md_engine.convert_to_html(full_markdown, colors)
+        
+        # This isolated HTML string will be pushed to the JS DOM Engine instantly without reloading
+        source_html = f"""
+            <div class="cover-page">
+                <div class="cover-title">{config['title']}</div>
+                <div class="cover-meta">By: {config['author']} | Date: {config['date']}</div>
+            </div>
+            {raw_html}
+        """
+
+        if preserve_scroll and self.is_preview_loaded:
+            # Silent zero-latency JS DOM Update
+            js_code = f"if (typeof window.updateWorkspace === 'function') {{ window.updateWorkspace({json.dumps(source_html)}); }} else {{ 'NOT_READY'; }}"
+            
+            def js_callback(res):
+                if res == 'NOT_READY':
+                    self._apply_full_render(source_html, config, colors)
+                    
+            self.preview.page().runJavaScript(js_code, js_callback)
+        else:
+            # Full CSS/HTML rebuild for structural changes
+            self._apply_full_render(source_html, config, colors)
+
+    def _apply_full_render(self, source_html, config, colors):
+        self.is_preview_loaded = False
+        
+        h1_color = colors['accent'] if config.get('h1_color', 'theme') == 'theme' else config['h1_color']
+        h2_color = colors['text'] if config.get('h2_color', 'theme') == 'theme' else config['h2_color']
+        h3_color = colors['text'] if config.get('h3_color', 'theme') == 'theme' else config['h3_color']
+        h4_color = colors['text'] if config.get('h4_color', 'theme') == 'theme' else config['h4_color']
+        
+        scale = config.get("scale", "A4")
+        if scale == "A3": 
+            page_w, page_h = "1123px", "1587px"
+        elif scale == "A5": 
+            page_w, page_h = "559px", "794px"
+        elif scale == "Letter": 
+            page_w, page_h = "816px", "1056px"
+        elif scale == "LinkedIn Square (1:1)": 
+            page_w, page_h = "1080px", "1080px"
+        elif scale == "LinkedIn Portrait (4:5)": 
+            page_w, page_h = "1080px", "1350px"
+        elif scale == "Custom":
+            try:
+                w = float(config.get('custom_width', 1080))
+                h = float(config.get('custom_height', 1080))
+            except ValueError:
+                w, h = 1080, 1080
+            page_w, page_h = f"{w}px", f"{h}px"
+        else: 
+            page_w, page_h = "794px", "1123px" 
+            
+        outer_bg = "radial-gradient(circle at 50% 50%, #4b5563 0%, #111827 100%)" if colors.get("is_dark", False) else "radial-gradient(circle at 50% 50%, #9ca3af 0%, #4b5563 100%)"
+        
+        try:
+            usable_h = float(page_h.replace('px', '')) - 120 
+        except:
+            usable_h = 1003 
+
+        code_theme_name = config.get("code_theme", "Atom One Dark")
+        code_css = self.get_code_theme_css(code_theme_name)
+        
+        page_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    background: {outer_bg};
+                    background-attachment: fixed;
+                    margin: 0;
+                    padding: 40px 0; 
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 40px; 
+                }}
+                .slide {{
+                    background-color: {colors['bg']};
+                    width: {page_w};
+                    min-height: {page_h};
+                    box-shadow: 0 15px 40px rgba(0,0,0,0.6); 
+                    padding: 60px; 
+                    box-sizing: border-box;
+                    color: {colors['text']};
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                    font-size: {config['font_size']};
+                    position: relative; 
+                }}
+                .slide-content {{
+                    width: 100%;
+                    height: 100%;
+                }}
+                .slide h1 {{ font-size: {config['h1_size']}; color: {h1_color}; border-bottom: 2px solid {h1_color}; margin-top: 0; }}
+                .slide h2 {{ font-size: {config['h2_size']}; color: {h2_color}; }}
+                .slide h3 {{ font-size: {config['h3_size']}; color: {h3_color}; }}
+                .slide h4 {{ font-size: {config['h4_size']}; color: {h4_color}; }}
+                .cover-page {{ text-align: center; margin-bottom: 50px; padding-bottom: 20px; border-bottom: 1px solid #ccc; }}
+                .cover-title {{ font-size: 32px; font-weight: bold; color: {h1_color}; }}
+                .cover-meta {{ font-size: 18px; color: {colors['text']}; opacity: 0.7; margin-top: 10px; }}
+                img {{ max-width: 100%; max-height: {usable_h}px; object-fit: contain; }} 
+                {code_css}
+            </style>
+        </head>
+        <body>
+            <div id="source-content" style="display: none;">
+                {source_html}
+            </div>
+            
+            <div id="workspace" style="display: flex; flex-direction: column; gap: 40px; align-items: center;"></div>
+
+            <script>
+                function runPaginator() {{
+                    const source = document.getElementById('source-content');
+                    const workspace = document.getElementById('workspace');
+                    workspace.innerHTML = '';
+                    
+                    const maxH = {usable_h};
+                    const splitTags = ['UL', 'OL', 'LI', 'DIV', 'BLOCKQUOTE', 'TABLE', 'TBODY', 'THEAD', 'TR'];
+
+                    function isMeaningful(n) {{
+                        return !(n.nodeType === Node.TEXT_NODE && n.textContent.trim() === '');
+                    }}
+
+                    function hasContent(node) {{
+                        if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') return true;
+                        if (node.nodeType === Node.ELEMENT_NODE) {{
+                            if (['IMG', 'BR', 'HR', 'IFRAME'].includes(node.tagName)) return true;
+                            let children = node.childNodes;
+                            for (let i = 0; i < children.length; i++) {{
+                                if (hasContent(children[i])) return true;
+                            }}
+                        }}
+                        return false;
+                    }}
+
+                    function createSlide() {{
+                        const slide = document.createElement('div');
+                        slide.className = 'slide';
+                        const content = document.createElement('div');
+                        content.className = 'slide-content';
+                        slide.appendChild(content);
+                        workspace.appendChild(slide);
+                        return content;
+                    }}
+
+                    let currentRoot = createSlide();
+
+                    function processNode(node, currentParent, root) {{
+                        if (!isMeaningful(node)) return {{ parent: currentParent, root: root }};
+                        
+                        currentParent.appendChild(node);
+                        
+                        if (root.scrollHeight > maxH) {{
+                            currentParent.removeChild(node);
+                            let isEmpty = !hasContent(root);
+                            
+                            if (node.nodeType === Node.ELEMENT_NODE && splitTags.includes(node.tagName) && node.childNodes.length > 0) {{
+                                let splitContainer = node.cloneNode(false);
+                                splitContainer.innerHTML = '';
+                                currentParent.appendChild(splitContainer);
+                                
+                                let children = Array.from(node.childNodes);
+                                let currentCont = splitContainer;
+                                let curRoot = root;
+                                
+                                for (let child of children) {{
+                                    let res = processNode(child, currentCont, curRoot);
+                                    currentCont = res.parent;
+                                    curRoot = res.root;
+                                }}
+                                
+                                if (!hasContent(splitContainer) && splitContainer.parentNode) {{
+                                    splitContainer.parentNode.removeChild(splitContainer);
+                                }}
+                                return {{ parent: currentCont.parentNode, root: curRoot }};
+                            }} else {{
+                                if (isEmpty) {{
+                                    currentParent.appendChild(node);
+                                    return {{ parent: currentParent, root: root }};
+                                }} else {{
+                                    let newRoot = createSlide();
+                                    let path = [];
+                                    let temp = currentParent;
+                                    while(temp !== root && temp !== null) {{
+                                        path.unshift(temp);
+                                        temp = temp.parentNode;
+                                    }}
+                                    let newParent = newRoot;
+                                    for (let p of path) {{
+                                        let clone = p.cloneNode(false);
+                                        clone.innerHTML = '';
+                                        newParent.appendChild(clone);
+                                        newParent = clone;
+                                    }}
+                                    newParent.appendChild(node);
+                                    return {{ parent: newParent, root: newRoot }};
+                                }}
+                            }}
+                        }}
+                        return {{ parent: currentParent, root: root }};
+                    }}
+
+                    const nodes = Array.from(source.childNodes);
+                    let curRoot = currentRoot;
+
+                    for (let i = 0; i < nodes.length; i++) {{
+                        let res = processNode(nodes[i], curRoot, curRoot);
+                        curRoot = res.root;
+                    }}
+                }}
+
+                window.onload = function() {{
+                    runPaginator();
+                }};
+
+                // Secure JavaScript Morpher API invoked by Python securely
+                window.updateWorkspace = function(newHtml) {{
+                    let scrollY = window.scrollY; // Capture precise scroll immediately
+                    document.getElementById('source-content').innerHTML = newHtml;
+                    runPaginator();
+                    window.scrollTo(0, scrollY); // Restore instantaneously so the view never moves
+                    return 'OK';
+                }};
+            </script>
+        </body>
+        </html>
+        """
+        self.preview.setHtml(page_html, QUrl("file:///"))
 
     def export_pdf(self):
         if not self.conn:
             QMessageBox.warning(self, "Warning", "No active session to export.")
             return
             
+        # Ensure the PDF path uses the base folder, correctly placing the file natively in your project folder
         pdf_path = os.path.join(self.current_session_dir, f"{self.current_session_name}.pdf")
         
         self.cursor.execute("SELECT key, value FROM settings")
@@ -744,8 +1079,19 @@ class ReportGeneratorApp(QMainWindow):
         logs = [row[0] for row in self.cursor.fetchall()]
         full_markdown = "\n\n".join(logs)
         
-        pdf_colors = {"bg": "#ffffff", "text": "#000000"} 
+        # Match the exported PDF strictly to the active unified config theme!
+        theme_name = config.get("theme", self.combo_preview_theme.currentText())
+        pdf_colors = self.themes.get(theme_name, self.themes["Soft Paper"])
+        
         raw_html = self.md_engine.convert_to_html(full_markdown, pdf_colors)
+        
+        code_theme_name = config.get("code_theme", "Atom One Dark")
+        code_css = self.get_code_theme_css(code_theme_name)
+        
+        h1_color = pdf_colors['accent'] if config.get('h1_color', 'theme') == 'theme' else config['h1_color']
+        h2_color = pdf_colors['text'] if config.get('h2_color', 'theme') == 'theme' else config['h2_color']
+        h3_color = pdf_colors['text'] if config.get('h3_color', 'theme') == 'theme' else config['h3_color']
+        h4_color = pdf_colors['text'] if config.get('h4_color', 'theme') == 'theme' else config['h4_color']
         
         pdf_html = f"""
         <!DOCTYPE html>
@@ -753,14 +1099,24 @@ class ReportGeneratorApp(QMainWindow):
         <head>
             <meta charset="utf-8">
             <style>
-                body {{ font-family: 'Segoe UI', Arial, sans-serif; font-size: {config['font_size']}; color: black; background: white; padding: 40px; }}
-                h1 {{ font-size: {config['h1_size']}; color: {config['h1_color']}; border-bottom: 2px solid {config['h1_color']}; }}
-                h2 {{ font-size: {config['h2_size']}; color: {config['h2_color']}; }}
-                h3 {{ font-size: {config['h3_size']}; color: {config['h3_color']}; }}
-                h4 {{ font-size: {config['h4_size']}; color: {config['h4_color']}; }}
+                @page {{ margin: 0; }} /* Native Qt pagination requires zeroing the CSS page margin */
+                body {{ 
+                    margin: 0;
+                    box-sizing: border-box;
+                    font-family: 'Segoe UI', Arial, sans-serif; 
+                    font-size: {config['font_size']}; 
+                    color: {pdf_colors['text']}; 
+                    background: {pdf_colors['bg']}; 
+                }}
+                h1 {{ font-size: {config['h1_size']}; color: {h1_color}; border-bottom: 2px solid {h1_color}; }}
+                h2 {{ font-size: {config['h2_size']}; color: {h2_color}; }}
+                h3 {{ font-size: {config['h3_size']}; color: {h3_color}; }}
+                h4 {{ font-size: {config['h4_size']}; color: {h4_color}; }}
                 .cover-page {{ text-align: center; margin-bottom: 50px; padding-bottom: 20px; border-bottom: 1px solid #ccc; }}
-                .cover-title {{ font-size: 32px; font-weight: bold; color: {config['h1_color']}; }}
-                .cover-meta {{ font-size: 18px; color: #555; margin-top: 10px; }}
+                .cover-title {{ font-size: 32px; font-weight: bold; color: {h1_color}; }}
+                .cover-meta {{ font-size: 18px; color: {pdf_colors['text']}; opacity: 0.7; margin-top: 10px; }}
+                img {{ max-width: 100%; }}
+                {code_css}
             </style>
         </head>
         <body>
@@ -778,27 +1134,30 @@ class ReportGeneratorApp(QMainWindow):
         
         def on_load_finished(ok):
             if ok:
-                page_size = QPageSize(QPageSize.A4)
+                scale_val = config.get('scale', 'A4')
+                page_size = QPageSize(QPageSize.A4) 
                 
-                if config['scale'] == "A3": 
+                # MATHEMATICALLY PERFECT PX TO POINT SCALING (pt = px * 0.75)
+                if scale_val == "A3": 
                     page_size = QPageSize(QPageSize.A3)
-                elif config['scale'] == "A5": 
+                elif scale_val == "A5": 
                     page_size = QPageSize(QPageSize.A5)
-                elif config['scale'] == "Letter": 
+                elif scale_val == "Letter": 
                     page_size = QPageSize(QPageSize.Letter)
-                elif config['scale'] == "LinkedIn Square (1:1)":
-                    page_size = QPageSize(QSizeF(1080, 1080), QPageSize.Unit.Point)
-                elif config['scale'] == "LinkedIn Portrait (4:5)":
-                    page_size = QPageSize(QSizeF(1080, 1350), QPageSize.Unit.Point)
-                elif config['scale'] == "Custom":
+                elif scale_val == "LinkedIn Square (1:1)":
+                    page_size = QPageSize(QSizeF(810, 810), QPageSize.Unit.Point)
+                elif scale_val == "LinkedIn Portrait (4:5)":
+                    page_size = QPageSize(QSizeF(810, 1012.5), QPageSize.Unit.Point)
+                elif scale_val == "Custom":
                     try:
                         w = float(config.get('custom_width', 1080))
                         h = float(config.get('custom_height', 1080))
                     except ValueError:
                         w, h = 1080, 1080
-                    page_size = QPageSize(QSizeF(w, h), QPageSize.Unit.Point)
+                    page_size = QPageSize(QSizeF(w * 0.75, h * 0.75), QPageSize.Unit.Point)
                 
-                layout = QPageLayout(page_size, QPageLayout.Portrait, QMarginsF(15, 15, 15, 15))
+                # Enforce physical PDF margins (equivalent to the 60px WYSIWYG padding)
+                layout = QPageLayout(page_size, QPageLayout.Portrait, QMarginsF(15, 15, 15, 15), QPageLayout.Millimeter)
                 self.pdf_engine.printToPdf(pdf_path, layout)
                 
         def on_pdf_exported(success):
@@ -809,10 +1168,6 @@ class ReportGeneratorApp(QMainWindow):
                 
         self.pdf_engine.loadFinished.connect(on_load_finished)
         self.pdf_engine.pdfPrintingFinished.connect(on_pdf_exported)
-
-    def scroll_to_bottom(self, ok):
-        if ok:
-            self.preview.page().runJavaScript("window.scrollTo(0, document.body.scrollHeight);")
 
     def clear_all_logs(self):
         reply = QMessageBox.question(self, 'Confirm Purge', 
@@ -826,34 +1181,27 @@ class ReportGeneratorApp(QMainWindow):
             
             self.editor.clear()
             self.refresh_sidebar()
-            self.render_document()
+            self.render_document(preserve_scroll=False)
 
     # --- UI & STYLING METHODS ---
 
     def toggle_sidebar(self):
         self.sidebar.setVisible(not self.sidebar.isVisible())
 
-    def toggle_theme(self):
-        self.is_dark_theme = not self.is_dark_theme
-        self.apply_theme()
-
     def apply_theme(self):
-        theme_name = "dark" if self.is_dark_theme else "light"
+        theme_name = self.combo_ui_theme.currentText()
         colors = self.themes[theme_name]
 
         if hasattr(self, 'editor'):
-            self.highlighter = MarkdownHighlighter(self.editor.document(), colors, self.is_dark_theme)
+            self.highlighter = MarkdownHighlighter(self.editor.document(), colors, colors["is_dark"])
 
-        # Polished, premium CSS
         stylesheet = f"""
             QWidget {{
                 background-color: {colors["bg"]};
                 color: {colors["text"]};
                 font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 14px;
             }}
             
-            /* --- POLISHED TOOLBAR STYLING --- */
             QFrame#toolbar {{
                 background-color: {colors["button_bg"]};
                 border: 1px solid {colors["border"]};
@@ -865,19 +1213,32 @@ class ReportGeneratorApp(QMainWindow):
                 padding: 6px 14px;
                 border-radius: 6px;
                 font-weight: bold;
+                font-size: 14px;
             }}
             QFrame#toolbar QPushButton:hover, QFrame#toolbar QComboBox:hover {{
                 background-color: {colors["button_hover"]};
                 border: 1px solid {colors["border"]};
             }}
-            QFrame#toolbar QLabel#preview_label {{
-                font-weight: bold;
-                padding-left: 10px;
-                background: transparent;
-            }}
             QComboBox::drop-down {{ border: none; }}
             
-            /* --- TOOLTIPS STYLING --- */
+            /* --- Dropdown Menu List Styling Fix --- */
+            QComboBox QAbstractItemView {{
+                background-color: {colors["bg"]};
+                color: {colors["text"]};
+                selection-background-color: {colors["button_hover"]};
+                selection-color: {colors["text"]};
+                border: 1px solid {colors["border"]};
+                outline: none;
+            }}
+            QComboBox QAbstractItemView::item {{
+                min-height: 28px;
+                padding-left: 8px;
+            }}
+            QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {{
+                background-color: {colors["button_hover"]};
+                color: {colors["text"]};
+            }}
+            
             QToolTip {{
                 background-color: {colors["bg"]};
                 color: {colors["text"]};
@@ -888,7 +1249,6 @@ class ReportGeneratorApp(QMainWindow):
                 font-weight: normal;
             }}
 
-            /* --- GENERAL INPUT & LIST STYLING --- */
             QPlainTextEdit, QDialog QLineEdit {{
                 background-color: {colors["bg"]};
                 border: 2px solid {colors["border"]};
@@ -905,6 +1265,7 @@ class ReportGeneratorApp(QMainWindow):
                 border-radius: 8px;
                 padding: 8px;
                 outline: 0; 
+                font-size: 14px;
             }}
             QListWidget::item {{
                 background-color: {colors["button_bg"]};
@@ -929,13 +1290,13 @@ class ReportGeneratorApp(QMainWindow):
                 border-radius: 4px;
             }}
             
-            /* Dialog Buttons Fallback */
             QDialog QPushButton {{
                 background-color: {colors["button_bg"]};
                 border: 1px solid {colors["border"]};
                 padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
+                font-size: 14px;
             }}
             QDialog QPushButton:hover {{
                 background-color: {colors["button_hover"]};
