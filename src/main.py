@@ -163,59 +163,116 @@ class HelpGuideDialog(QDialog):
         </head>
         <body>
             <h1>Report Generator Pro - Official User Guide</h1>
-            <p>Welcome to the ultimate offline, zero-latency Markdown and LaTeX note-taking environment designed specifically for Data Analysts and Data Scientists.</p>
+            <p>This guide explains every major control in the app: how to create and open sessions, how logs work, how to use the editor and preview, what each button does, and which shortcuts are available.</p>
 
-            <h2>1. The Core Philosophy (File Management)</h2>
-            <div class="note"><strong>Golden Rule:</strong> 1 Session = 1 Database = 1 PDF Document.</div>
-            <p>To eliminate file spaghetti, everything revolves around your selected project directory:</p>
+            <h2>1. First Time Use</h2>
+            <div class="note"><strong>Core rule:</strong> your work is saved as a database file inside a visible <code>sessions</code> folder. You do not need hidden files.</div>
             <ul>
-                <li><strong>📝 New:</strong> Creates a new project. You choose a folder and specify a name (e.g., <code>EDA_Report</code>). The app generates a visible <code>sessions/EDA_Report.db</code> file. This single file tracks your entire history for that specific document.</li>
-                <li><strong>📂 Open:</strong> Resumes an existing project. Open the visible <code>sessions</code> folder and select your database file.</li>
+                <li><strong>New:</strong> create a project folder, then enter a session name. The app creates <code>sessions/&lt;name&gt;.db</code> inside that folder.</li>
+                <li><strong>Open:</strong> choose your project folder, then select one of the existing <code>.db</code> files from the visible <code>sessions</code> folder.</li>
+                <li><strong>Current session:</strong> the title bar shows the active session name.</li>
             </ul>
 
-            <h2>2. Writing and Previewing (The Editor)</h2>
-            <p>The editor supports extended Markdown, Code Blocks, and LaTeX equations. It relies on a two-step rendering process:</p>
+            <h2>2. Top Menu Buttons</h2>
             <div class="feature-box">
-                <h3>Keyboard Shortcuts</h3>
                 <ul>
-                    <li><span class="shortcut">Ctrl+S</span> <strong>(Live Draft):</strong> Instantly renders your current editor text into the preview window alongside your saved logs. <em>It does not save to the database.</em> Use this to test your math syntax or code formatting.</li>
-                    <li><span class="shortcut">Ctrl+Shift+S</span> <strong>(Commit Log):</strong> Saves your current text into the database as a new discrete log, adding it to the history sidebar.</li>
-                    <li><span class="shortcut">Ctrl+Shift+E</span> <strong>(Export):</strong> Generates the final PDF.</li>
-                    <li><span class="shortcut">Ctrl</span> + <strong>Mouse Wheel Up/Down:</strong> Zoom in and out of the editor text dynamically. <span class="shortcut">Ctrl++</span> and <span class="shortcut">Ctrl+-</span> also work.</li>
+                    <li><strong>Logs:</strong> shows or hides the logs panel on the left side.</li>
+                    <li><strong>New:</strong> creates a new session database in the visible <code>sessions</code> folder.</li>
+                    <li><strong>Open:</strong> opens an existing session database from the visible <code>sessions</code> folder.</li>
+                    <li><strong>Clear Logs:</strong> removes all saved logs from the current session.</li>
+                    <li><strong>Layout:</strong> opens the PDF layout settings dialog.</li>
                 </ul>
             </div>
 
-            <h2>3. Supported Syntax Elements</h2>
+            <h2>3. Left Sidebar Buttons</h2>
+            <p>The left sidebar contains icon buttons for fast access to the most important actions.</p>
             <ul>
-                <li><strong>Headers:</strong> Use <code># Header 1</code>, <code>## Header 2</code>.</li>
-                <li><strong>Lists:</strong> Use <code>- Item</code> or <code>1. Item</code>.</li>
-                <li><strong>Code Blocks:</strong> Use triple backticks (e.g., <code>```python</code>) for syntax-highlighted code.</li>
-                <li><strong>Inline Math:</strong> Wrap your LaTeX in single dollar signs: <code>$E = mc^2$</code>.</li>
-                <li><strong>Block Math:</strong> Wrap your LaTeX in double dollar signs: <code>$$\lim_{x \to \infty} f(x)$$</code>.</li>
-                <li><strong>Dividers:</strong> Use <code>line{---}</code> to render a visual separation line.</li>
-                <li><strong>Images:</strong> Standard markdown <code>![Alt](/path/to/img.png)</code> or raw HTML <code>&lt;img src="/path/img.png" width="400"&gt;</code></li>
+                <li><strong>Editor Theme:</strong> opens a popup list of UI themes and applies the selected theme immediately.</li>
+                <li><strong>Preview Theme:</strong> opens a popup list of preview themes for the exported/previewed document.</li>
+                <li><strong>Export:</strong> exports the current session as a PDF.</li>
+                <li><strong>Help:</strong> opens this guide.</li>
+                <li><strong>GitHub:</strong> opens the project repository in your browser.</li>
             </ul>
 
-            <h2>4. Managing Logs (The Sidebar)</h2>
-            <p>Your document is constructed block by block (logs). Open the <strong>☰ Logs</strong> sidebar to manage your document's structure:</p>
+            <h2>4. Editor And Preview</h2>
+            <p>The center of the app is split into two parts: the editor on the left and the live preview on the right.</p>
             <ul>
-                <li><strong>Single Click:</strong> Smoothly scrolls the preview window to that exact section and temporarily highlights it with a gray pulse.</li>
-                <li><strong>Double Click:</strong> Opens a dedicated Popup Editor. Here, you can fix typos or update code in that specific log. Press <span class="shortcut">Ctrl+Enter</span> to save changes, or click the Delete button to remove the log entirely.</li>
-                <li><strong>🗑️ Clear Logs:</strong> Completely wipes the current database session, resetting your document to a blank state.</li>
+                <li><strong>Editor:</strong> type Markdown, LaTeX, code blocks, and normal text here.</li>
+                <li><strong>Preview:</strong> shows the rendered result of the current editor text and all saved logs.</li>
+                <li><strong>Zoom:</strong> use Ctrl with the mouse wheel inside the editor to zoom text in and out.</li>
             </ul>
 
-            <h2>5. Custom Layouts & Page Sizes</h2>
-            <p>Click the <strong>⚙️ Layout</strong> button to adjust the final PDF output. <em>Note: These settings strictly control the exported PDF document, not your application UI theme.</em></p>
+            <h3>Supported Markdown And Content</h3>
             <ul>
-                <li><strong>Title, Author & Date:</strong> Automatically generates a beautiful, standardized cover block at the very top of your PDF.</li>
-                <li><strong>Scale (Dimensions):</strong> Choose standard paper formats (A4, A3, A5, Letter).</li>
-                <li><strong>LinkedIn Carousel Formats:</strong> Select <strong>LinkedIn Square (1:1)</strong> or <strong>LinkedIn Portrait (4:5)</strong> to easily export beautifully proportioned slides for social media.</li>
-                <li><strong>Custom Dimensions:</strong> Select "Custom" scale and define exact Width and Height dimensions in Pixels at the bottom of the form.</li>
-                <li><strong>Theme Overrides:</strong> Keep headings as "theme" to inherit the accent color naturally, or override them with precise hex colors precisely to match your brand.</li>
+                <li><strong>Headers:</strong> <code># H1</code>, <code>## H2</code>, <code>### H3</code>.</li>
+                <li><strong>Lists:</strong> <code>- Item</code> or <code>1. Item</code>.</li>
+                <li><strong>Code blocks:</strong> use triple backticks such as <code>```python</code>.</li>
+                <li><strong>Inline math:</strong> <code>$E = mc^2$</code>.</li>
+                <li><strong>Block math:</strong> <code>$$\lim_{x \to \infty} f(x)$$</code>.</li>
+                <li><strong>Divider:</strong> use <code>line{---}</code>.</li>
+                <li><strong>Images:</strong> standard markdown image syntax or raw HTML image tags.</li>
             </ul>
 
-            <h2>6. PDF Export Engine</h2>
-            <p>Once your document looks perfect in the preview, press <span class="shortcut">Ctrl+Shift+E</span> or click <strong>📄 Export</strong>. The app silently compiles your layout settings and your entire log history, generating a flawless PDF directly in your project root directory. If you edit your notes and export again, it cleanly overwrites the exact same file to prevent duplicates.</p>
+            <h2>5. Logs Workflow</h2>
+            <p>Logs are the saved building blocks of your document.</p>
+            <ul>
+                <li><strong>Single click a log:</strong> scrolls the preview to that log and highlights it briefly.</li>
+                <li><strong>Double click a log:</strong> opens the log editor dialog for updating or deleting that log.</li>
+                <li><strong>Delete in log editor:</strong> removes that single log entry.</li>
+                <li><strong>Clear Logs:</strong> removes all logs from the current session and resets the document history.</li>
+            </ul>
+
+            <h2>6. Layout Settings</h2>
+            <p>The <strong>Layout</strong> dialog controls the PDF output, not the editor UI.</p>
+            <ul>
+                <li><strong>Title:</strong> shown on the PDF cover.</li>
+                <li><strong>Author and Date:</strong> optional metadata fields for the PDF cover.</li>
+                <li><strong>Scale:</strong> choose A4, A3, A5, Letter, LinkedIn Square (1:1), LinkedIn Portrait (4:5), or Custom.</li>
+                <li><strong>Custom size:</strong> enter exact width and height when using Custom.</li>
+                <li><strong>Theme:</strong> controls the document color palette in preview and export.</li>
+                <li><strong>Code theme:</strong> controls syntax highlighting inside code blocks.</li>
+                <li><strong>Heading colors:</strong> can inherit from the selected theme or use custom hex values.</li>
+            </ul>
+
+            <h2>7. Export</h2>
+            <p>Export generates a PDF from all saved logs in the current session. The result uses the selected theme, code theme, and layout settings. Export overwrites the existing PDF for that session.</p>
+
+            <h2>8. Shortcuts</h2>
+            <div class="feature-box">
+                <ul>
+                    <li><span class="shortcut">Ctrl+S</span> preview the current editor text without saving it as a log.</li>
+                    <li><span class="shortcut">Ctrl+Shift+S</span> save the current editor text as a log.</li>
+                    <li><span class="shortcut">Ctrl+Shift+E</span> export the session to PDF.</li>
+                    <li><span class="shortcut">Ctrl+N</span> create a new session.</li>
+                    <li><span class="shortcut">Ctrl+O</span> open an existing session.</li>
+                    <li><span class="shortcut">Ctrl+Shift+Delete</span> clear all logs.</li>
+                    <li><span class="shortcut">Ctrl+,</span> open Layout settings.</li>
+                    <li><span class="shortcut">Ctrl+L</span> toggle the Logs sidebar on or off.</li>
+                    <li><span class="shortcut">Ctrl+Enter</span> save changes inside the log editor dialog.</li>
+                    <li><span class="shortcut">Ctrl+Return</span> also saves changes inside the log editor dialog.</li>
+                    <li><span class="shortcut">Esc</span> close the log editor dialog without saving.</li>
+                    <li><span class="shortcut">Ctrl</span> + <strong>mouse wheel</strong> zoom the editor text.</li>
+                </ul>
+            </div>
+
+            <h2>9. Suggested Workflow</h2>
+            <ul>
+                <li>Click <strong>New</strong> to create a fresh session.</li>
+                <li>Type in the editor.</li>
+                <li>Press <strong>Ctrl+S</strong> to preview a draft.</li>
+                <li>Press <strong>Ctrl+Shift+S</strong> to save a log.</li>
+                <li>Use the <strong>Logs</strong> sidebar to jump between saved sections.</li>
+                <li>Adjust <strong>Layout</strong> and <strong>Preview Theme</strong> if needed.</li>
+                <li>Click <strong>Export</strong> or press <strong>Ctrl+Shift+E</strong> when finished.</li>
+            </ul>
+
+            <h2>10. Troubleshooting</h2>
+            <ul>
+                <li>If Open does nothing, make sure the project folder contains a visible <code>sessions</code> folder and at least one <code>.db</code> file.</li>
+                <li>If content appears twice, use <strong>Ctrl+S</strong> for preview and <strong>Ctrl+Shift+S</strong> only when you want to commit a log.</li>
+                <li>If the preview looks different from the exported PDF, check the selected <strong>Layout</strong> scale and <strong>Preview Theme</strong>.</li>
+                <li>If a log is wrong, double click it in the Logs sidebar and edit or delete it from the popup.</li>
+            </ul>
         </body>
         </html>
         """
