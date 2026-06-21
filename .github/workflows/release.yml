@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             executable_name: ReportGeneratorPro-Linux
             artifact_name: ReportGeneratorPro
             icon: assets/icon.png
