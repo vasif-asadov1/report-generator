@@ -2,6 +2,11 @@ import sys
 import os
 import sqlite3
 import json
+# --- LINUX PYINSTALLER WEBENGINE FIXES ---
+if sys.platform.startswith("linux"):
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QPlainTextEdit, QSplitter, QListWidget, QComboBox,
