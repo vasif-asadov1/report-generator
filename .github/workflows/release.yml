@@ -45,7 +45,8 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyinstaller PySide6 markdown pygments jinja2
+        pip install -r requirements.txt
+        pip install pyinstaller jinja2
 
     - name: Build Application
       # --add-data dynamically uses ":" for Linux and ";" for Windows

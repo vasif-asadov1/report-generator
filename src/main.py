@@ -6,12 +6,12 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QPlainTextEdit, QSplitter, QListWidget, QComboBox,
     QDialog, QMessageBox, QFileDialog, QFormLayout, QLineEdit, QDialogButtonBox,
-    QFrame, QLabel, QSizePolicy, QStyledItemDelegate
+    QFrame, QLabel, QSizePolicy, QStyledItemDelegate, QToolButton, QMenu, QInputDialog
 )
-from PySide6.QtCore import Qt, QUrl, QRegularExpression, QMarginsF, QSizeF
+from PySide6.QtCore import Qt, QUrl, QRegularExpression, QMarginsF, QSizeF, QSize
 from PySide6.QtGui import (
     QFont, QKeySequence, QShortcut, QSyntaxHighlighter, QTextCharFormat, 
-    QColor, QPageLayout, QPageSize, QIcon, QDesktopServices
+    QColor, QPageLayout, QPageSize, QIcon, QDesktopServices, QAction, QActionGroup
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
@@ -27,6 +27,12 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+
+def build_tooltip(description, shortcut=None):
+    if shortcut:
+        return f"{description}\nShortcut: {shortcut}"
+    return description
 
 class ZoomablePlainTextEdit(QPlainTextEdit):
     """Custom PlainTextEdit that natively supports zooming via mouse wheel and shortcuts."""
@@ -94,6 +100,10 @@ class EditLogDialog(QDialog):
         self.btn_delete = QPushButton("🗑️ Delete Log")
         self.btn_cancel = QPushButton("Cancel (Esc)")
         self.btn_update = QPushButton("💾 Update (Ctrl+Enter)")
+
+        self.btn_delete.setToolTip(build_tooltip("Delete the selected log entry permanently."))
+        self.btn_cancel.setToolTip(build_tooltip("Close this editor without saving changes.", "Esc"))
+        self.btn_update.setToolTip(build_tooltip("Save the edited log content.", "Ctrl+Enter"))
         
         btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch() 
@@ -131,7 +141,7 @@ class HelpGuideDialog(QDialog):
         layout = QVBoxLayout(self)
         self.browser = QWebEngineView()
         
-        self.html_content = """
+        self.html_content = r"""
         <!DOCTYPE html>
         <html>
         <head>
@@ -159,8 +169,8 @@ class HelpGuideDialog(QDialog):
             <div class="note"><strong>Golden Rule:</strong> 1 Session = 1 Database = 1 PDF Document.</div>
             <p>To eliminate file spaghetti, everything revolves around your selected project directory:</p>
             <ul>
-                <li><strong>📝 New:</strong> Creates a new project. You choose a folder and specify a name (e.g., <code>EDA_Report</code>). The app generates a <code>.session/EDA_Report.db</code> file. This single file tracks your entire history for that specific document.</li>
-                <li><strong>📂 Open:</strong> Resumes an existing project. Navigate into the <code>.session</code> folder and select your database file.</li>
+                <li><strong>📝 New:</strong> Creates a new project. You choose a folder and specify a name (e.g., <code>EDA_Report</code>). The app generates a visible <code>sessions/EDA_Report.db</code> file. This single file tracks your entire history for that specific document.</li>
+                <li><strong>📂 Open:</strong> Resumes an existing project. Open the visible <code>sessions</code> folder and select your database file.</li>
             </ul>
 
             <h2>2. Writing and Previewing (The Editor)</h2>
@@ -215,6 +225,9 @@ class HelpGuideDialog(QDialog):
         btn_layout = QHBoxLayout()
         self.btn_save_pdf = QPushButton("💾 Save Guide to Desktop")
         self.btn_close = QPushButton("Close")
+
+        self.btn_save_pdf.setToolTip(build_tooltip("Export this user guide as a PDF file."))
+        self.btn_close.setToolTip(build_tooltip("Close the user guide window."))
         
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save_pdf)
@@ -386,15 +399,56 @@ class ReportGeneratorApp(QMainWindow):
         self.setup_shortcuts()
         self.render_document(preserve_scroll=False)
 
+    def create_icon_button(self, icon_name, tooltip, handler):
+        button = QToolButton()
+        button.setCursor(Qt.PointingHandCursor)
+        button.setToolTip(tooltip)
+        button.setIcon(QIcon(resource_path(icon_name)))
+        button.setIconSize(QSize(28, 28))
+        button.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        button.setAutoRaise(True)
+        button.clicked.connect(handler)
+        return button
+
+    def open_theme_menu(self, target_combo, anchor_button):
+        menu = QMenu(self)
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+
+        for theme_name in self.themes.keys():
+            action = QAction(theme_name, menu)
+            action.setCheckable(True)
+            action.setChecked(theme_name == target_combo.currentText())
+            action.triggered.connect(lambda checked=False, name=theme_name, combo=target_combo: combo.setCurrentText(name))
+            group.addAction(action)
+            menu.addAction(action)
+
+        menu.exec(anchor_button.mapToGlobal(anchor_button.rect().bottomLeft()))
+
     def setup_shortcuts(self):
-        shortcut_save = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
-        shortcut_save.activated.connect(self.save_log)
+        self.shortcut_save = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        self.shortcut_save.activated.connect(self.save_log)
 
-        shortcut_preview = QShortcut(QKeySequence("Ctrl+S"), self)
-        shortcut_preview.activated.connect(self.preview_only)
+        self.shortcut_preview = QShortcut(QKeySequence("Ctrl+S"), self)
+        self.shortcut_preview.activated.connect(self.preview_only)
 
-        shortcut_export = QShortcut(QKeySequence("Ctrl+Shift+E"), self)
-        shortcut_export.activated.connect(self.export_pdf)
+        self.shortcut_export = QShortcut(QKeySequence("Ctrl+Shift+E"), self)
+        self.shortcut_export.activated.connect(self.export_pdf)
+
+        self.shortcut_new = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.shortcut_new.activated.connect(self.new_session)
+
+        self.shortcut_open = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.shortcut_open.activated.connect(self.open_session)
+
+        self.shortcut_clear_logs = QShortcut(QKeySequence("Ctrl+Shift+Delete"), self)
+        self.shortcut_clear_logs.activated.connect(self.clear_all_logs)
+
+        self.shortcut_layout = QShortcut(QKeySequence("Ctrl+,"), self)
+        self.shortcut_layout.activated.connect(self.open_layout_settings)
+
+        self.shortcut_toggle_logs = QShortcut(QKeySequence("Ctrl+L"), self)
+        self.shortcut_toggle_logs.activated.connect(self.toggle_sidebar)
 
     def setup_ui(self):
         self.central_widget = QWidget()
@@ -415,29 +469,28 @@ class ReportGeneratorApp(QMainWindow):
         # 1. Left Group: File & Navigation
         self.btn_toggle_logs = QPushButton("☰ Logs")
         self.btn_toggle_logs.setCursor(Qt.PointingHandCursor)
-        self.btn_toggle_logs.setToolTip("Toggle the logs sidebar history")
+        self.btn_toggle_logs.setToolTip(build_tooltip("Show or hide the logs sidebar."))
         self.btn_toggle_logs.clicked.connect(self.toggle_sidebar)
 
         self.btn_new = QPushButton("📝 New")
         self.btn_new.setCursor(Qt.PointingHandCursor)
-        self.btn_new.setToolTip("Create a new project session folder")
+        self.btn_new.setToolTip(build_tooltip("Create a new project session."))
         self.btn_new.clicked.connect(self.new_session)
         
         self.btn_open = QPushButton("📂 Open")
         self.btn_open.setCursor(Qt.PointingHandCursor)
-        self.btn_open.setToolTip("Open an existing project session")
+        self.btn_open.setToolTip(build_tooltip("Open an existing project session."))
         self.btn_open.clicked.connect(self.open_session)
         
         self.btn_clear_all = QPushButton("🗑️ Clear Logs")
         self.btn_clear_all.setCursor(Qt.PointingHandCursor)
-        self.btn_clear_all.setToolTip("Purge all logs in the current session")
+        self.btn_clear_all.setToolTip(build_tooltip("Delete all logs in the current session."))
         self.btn_clear_all.clicked.connect(self.clear_all_logs)
 
         # 2. Middle Group: Theming & Settings
         self.combo_ui_theme = QComboBox()
         self.combo_ui_theme.setItemDelegate(QStyledItemDelegate()) # Force custom CSS on items
         self.combo_ui_theme.setCursor(Qt.PointingHandCursor)
-        self.combo_ui_theme.setToolTip("Change the color theme of the entire editor UI")
         self.combo_ui_theme.addItems(list(self.themes.keys()))
         self.combo_ui_theme.setCurrentText("Atom One Dark")
         self.combo_ui_theme.currentTextChanged.connect(self.apply_theme) 
@@ -445,59 +498,72 @@ class ReportGeneratorApp(QMainWindow):
         self.combo_preview_theme = QComboBox()
         self.combo_preview_theme.setItemDelegate(QStyledItemDelegate()) # Force custom CSS on items
         self.combo_preview_theme.setCursor(Qt.PointingHandCursor)
-        self.combo_preview_theme.setToolTip("Change the color theme of the generated document")
         self.combo_preview_theme.addItems(list(self.themes.keys()))
         self.combo_preview_theme.setCurrentText("Soft Paper")
         self.combo_preview_theme.currentTextChanged.connect(self.on_preview_theme_changed) 
 
         self.btn_layout = QPushButton("⚙️ Layout")
         self.btn_layout.setCursor(Qt.PointingHandCursor)
-        self.btn_layout.setToolTip("Configure PDF page size, fonts, and colors")
+        self.btn_layout.setToolTip(build_tooltip("Open PDF layout settings."))
         self.btn_layout.clicked.connect(self.open_layout_settings)
-
-        self.btn_export = QPushButton("📄 Export")
-        self.btn_export.setCursor(Qt.PointingHandCursor)
-        self.btn_export.setToolTip("Export the current document to PDF (Ctrl+Shift+E)")
-        self.btn_export.clicked.connect(self.export_pdf)
-        
-        # 3. Right Group: Actions & Help
-        self.btn_github = QPushButton(" GitHub")
-        self.btn_github.setCursor(Qt.PointingHandCursor)
-        self.btn_github.setToolTip("Visit the open-source repository")
-        
-        # Use resource_path for the icon so it survives PyInstaller bundling
-        self.btn_github.setIcon(QIcon(resource_path("assets/github.svg")))
-        
-        self.btn_github.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/vasif-asadov1/report-generator")))
-        
-        self.btn_help = QPushButton("❓ Help")
-        self.btn_help.setCursor(Qt.PointingHandCursor)
-        self.btn_help.setToolTip("Open the User Guide and Manual")
-        self.btn_help.clicked.connect(self.open_help_guide)
 
         # Add all to toolbar layout in a clean, professional grouping
         self.top_bar.addWidget(self.btn_toggle_logs)
         self.top_bar.addWidget(self.btn_new)
         self.top_bar.addWidget(self.btn_open)
         self.top_bar.addWidget(self.btn_clear_all)
-        
-        self.top_bar.addSpacing(20) 
-        
-        self.top_bar.addWidget(self.combo_ui_theme)
-        self.top_bar.addWidget(self.combo_preview_theme)
         self.top_bar.addWidget(self.btn_layout)
-        self.top_bar.addWidget(self.btn_export)
-        
-        self.top_bar.addStretch() 
-        
-        self.top_bar.addWidget(self.btn_github)
-        self.top_bar.addWidget(self.btn_help)
 
         self.main_layout.addWidget(self.toolbar_frame)
 
         # --- MAIN CONTENT AREA ---
         self.content_layout = QHBoxLayout()
         self.main_layout.addLayout(self.content_layout)
+
+        self.icon_sidebar = QFrame()
+        self.icon_sidebar.setObjectName("iconSidebar")
+        self.icon_sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.icon_sidebar.setFixedWidth(76)
+
+        sidebar_layout = QVBoxLayout(self.icon_sidebar)
+        sidebar_layout.setContentsMargins(10, 12, 10, 12)
+        sidebar_layout.setSpacing(10)
+
+        self.btn_editor_theme = self.create_icon_button(
+            "assets/editor_theme.svg",
+            build_tooltip("Choose the editor theme."),
+            lambda: self.open_theme_menu(self.combo_ui_theme, self.btn_editor_theme)
+        )
+        self.btn_preview_theme = self.create_icon_button(
+            "assets/preview_theme.svg",
+            build_tooltip("Choose the preview theme."),
+            lambda: self.open_theme_menu(self.combo_preview_theme, self.btn_preview_theme)
+        )
+        self.btn_export = self.create_icon_button(
+            "assets/export.svg",
+            build_tooltip("Export the current document to PDF.", "Ctrl+Shift+E"),
+            self.export_pdf
+        )
+
+        self.btn_help = self.create_icon_button(
+            "assets/help.png",
+            build_tooltip("Open the user guide."),
+            self.open_help_guide
+        )
+        self.btn_github = self.create_icon_button(
+            "assets/github.svg",
+            build_tooltip("Open the project repository on GitHub."),
+            lambda: QDesktopServices.openUrl(QUrl("https://github.com/vasif-asadov1/report-generator"))
+        )
+
+        sidebar_layout.addWidget(self.btn_editor_theme)
+        sidebar_layout.addWidget(self.btn_preview_theme)
+        sidebar_layout.addWidget(self.btn_export)
+        sidebar_layout.addStretch()
+        sidebar_layout.addWidget(self.btn_help)
+        sidebar_layout.addWidget(self.btn_github)
+
+        self.content_layout.addWidget(self.icon_sidebar)
 
         self.sidebar = QListWidget()
         self.sidebar.setFixedWidth(250)
@@ -530,6 +596,16 @@ class ReportGeneratorApp(QMainWindow):
 
     def preview_only(self):
         current_text = self.editor.toPlainText().strip()
+        if not current_text:
+            return
+
+        if self.conn:
+            self.cursor.execute("SELECT content FROM logs ORDER BY id DESC LIMIT 1")
+            row = self.cursor.fetchone()
+            if row and row[0].strip() == current_text:
+                self.render_document(preserve_scroll=True)
+                return
+
         self.render_document(additional_text=current_text, preserve_scroll=True)
 
     def open_help_guide(self):
@@ -538,24 +614,26 @@ class ReportGeneratorApp(QMainWindow):
         dialog.exec()
 
     def new_session(self):
-        file_path, _ = QFileDialog.getSaveFileName(self, "Create New Session", "", "Database Name (*.db)")
-        if not file_path: return False
-        
-        dir_path = os.path.dirname(file_path)
-        base_name = os.path.basename(file_path)
-        if base_name.endswith('.db'): base_name = base_name[:-3]
-        
-        # Safeguard: Ensure we find the project root if user selects path directly inside .session
-        if os.path.basename(dir_path) == '.session':
-            dir_path = os.path.dirname(dir_path)
-            
-        self.current_session_dir = dir_path
+        project_dir = QFileDialog.getExistingDirectory(self, "Choose Project Folder", "")
+        if not project_dir:
+            return False
+
+        base_name, ok = QInputDialog.getText(self, "Create New Session", "Session name:")
+        if not ok:
+            return False
+
+        base_name = base_name.strip()
+        if not base_name:
+            QMessageBox.warning(self, "Warning", "Please enter a session name.")
+            return False
+
+        self.current_session_dir = project_dir
         self.current_session_name = base_name
-        
-        session_folder = os.path.join(dir_path, ".session")
+
+        session_folder = os.path.join(project_dir, "sessions")
         os.makedirs(session_folder, exist_ok=True)
         db_path = os.path.join(session_folder, f"{base_name}.db")
-        
+
         self.connect_to_db(db_path, base_name)
         return True
     
@@ -584,22 +662,40 @@ class ReportGeneratorApp(QMainWindow):
             self.render_document(preserve_scroll=False)
 
     def open_session(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Existing Session", "", "Database Files (*.db)")
-        if not file_path: return
-        
-        session_folder = os.path.dirname(file_path)
-        
-        # Safeguard: Find the actual project root folder (parent of .session)
-        if os.path.basename(session_folder) == '.session':
-            self.current_session_dir = os.path.dirname(session_folder) 
-        else:
-            self.current_session_dir = session_folder
+        project_dir = self.current_session_dir
+        if not project_dir or not os.path.isdir(project_dir):
+            project_dir = QFileDialog.getExistingDirectory(self, "Choose Project Folder", "")
+            if not project_dir:
+                return
 
-        base_name = os.path.basename(file_path)
-        if base_name.endswith('.db'): base_name = base_name[:-3]
-            
+        session_folder = os.path.join(project_dir, "sessions")
+        legacy_folder = os.path.join(project_dir, ".session")
+
+        if os.path.isdir(session_folder):
+            start_folder = session_folder
+        elif os.path.isdir(legacy_folder):
+            start_folder = legacy_folder
+        else:
+            QMessageBox.warning(
+                self,
+                "Warning",
+                f"No sessions folder found in:\n{project_dir}\n\nExpected a visible 'sessions' folder."
+            )
+            return
+
+        db_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open Existing Session",
+            start_folder,
+            "Database Files (*.db)"
+        )
+        if not db_path:
+            return
+
+        base_name = os.path.splitext(os.path.basename(db_path))[0]
+        self.current_session_dir = project_dir
         self.current_session_name = base_name
-        self.connect_to_db(file_path, base_name)
+        self.connect_to_db(db_path, base_name)
 
     def connect_to_db(self, db_path, name):
         if self.conn: self.conn.close()
@@ -665,6 +761,12 @@ class ReportGeneratorApp(QMainWindow):
         if not self.conn:
             success = self.new_session()
             if not success: return 
+
+        self.cursor.execute("SELECT content FROM logs ORDER BY id DESC LIMIT 1")
+        row = self.cursor.fetchone()
+        if row and row[0].strip() == text:
+            self.render_document(preserve_scroll=True)
+            return
             
         self.cursor.execute("INSERT INTO logs (content) VALUES (?)", (text,))
         self.conn.commit()
@@ -754,7 +856,6 @@ class ReportGeneratorApp(QMainWindow):
         if self.conn:
             self.cursor.execute("UPDATE settings SET value = ? WHERE key = 'theme'", (text,))
             self.conn.commit()
-        # Changed to False to force global CSS background changes visually
         self.render_document(preserve_scroll=False)
 
     def get_code_theme_css(self, theme_name):
@@ -829,7 +930,7 @@ class ReportGeneratorApp(QMainWindow):
             return
             
         full_markdown = "\n\n".join(logs)
-        theme_name = config.get("theme", self.combo_preview_theme.currentText())
+        theme_name = self.combo_preview_theme.currentText()
         colors = self.themes.get(theme_name, self.themes["Soft Paper"])
         
         raw_html = self.md_engine.convert_to_html(full_markdown, colors)
@@ -1080,7 +1181,7 @@ class ReportGeneratorApp(QMainWindow):
         full_markdown = "\n\n".join(logs)
         
         # Match the exported PDF strictly to the active unified config theme!
-        theme_name = config.get("theme", self.combo_preview_theme.currentText())
+        theme_name = self.combo_preview_theme.currentText()
         pdf_colors = self.themes.get(theme_name, self.themes["Soft Paper"])
         
         raw_html = self.md_engine.convert_to_html(full_markdown, pdf_colors)
@@ -1207,6 +1308,11 @@ class ReportGeneratorApp(QMainWindow):
                 border: 1px solid {colors["border"]};
                 border-radius: 8px;
             }}
+            QFrame#iconSidebar {{
+                background-color: {colors["button_bg"]};
+                border: 1px solid {colors["border"]};
+                border-radius: 8px;
+            }}
             QFrame#toolbar QPushButton, QFrame#toolbar QComboBox {{
                 background-color: transparent;
                 border: 1px solid transparent;
@@ -1214,6 +1320,20 @@ class ReportGeneratorApp(QMainWindow):
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 14px;
+            }}
+            QFrame#iconSidebar QToolButton {{
+                background-color: transparent;
+                border: 1px solid transparent;
+                border-radius: 8px;
+                padding: 10px;
+            }}
+            QFrame#iconSidebar QToolButton:hover {{
+                background-color: {colors["button_hover"]};
+                border: 1px solid {colors["border"]};
+            }}
+            QFrame#iconSidebar QToolButton:pressed {{
+                background-color: {colors["accent"]};
+                color: white;
             }}
             QFrame#toolbar QPushButton:hover, QFrame#toolbar QComboBox:hover {{
                 background-color: {colors["button_hover"]};
